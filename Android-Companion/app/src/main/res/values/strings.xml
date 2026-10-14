@@ -1,0 +1,47 @@
+<resources>
+    <string name="app_name">Pixel Mirror</string>
+    <string name="tile_name">Pixel Mirror</string>
+    <string name="tile_active_subtitle">Mirroring Active</string>
+    <string name="tile_inactive_subtitle">Tap to Start</string>
+    
+    <string name="notification_channel_name">Mirror Server Service</string>
+    <string name="notification_channel_desc">Active background local socket server for desktop mirroring</string>
+    <string name="notification_title">Pixel Mirror Active</string>
+    <string name="notification_listening">Listening for Windows Client on port %1$d</string>
+    <string name="notification_connected">Connected to Windows Client (%1$s)</string>
+    
+    <string name="accessibility_service_name">Pixel Mirror DRM Companion</string>
+    <string name="accessibility_service_description">Enables real-time UI hierarchy scraping for FLAG_SECURE windows and remote coordinate gestures for the Pixel Mirror ecosystem.</string>
+    <string name="notification_listener_service_name">Pixel Mirror Notification Sync</string>
+    
+    <!-- UI Strings -->
+    <string name="title_dashboard">Pixel Mirror Core</string>
+    <string name="subtitle_dashboard">Pixel 10 Companion Bridge</string>
+    <string name="status_server_running">Socket Server Running</string>
+    <string name="status_server_stopped">Socket Server Inactive</string>
+    <string name="status_client_connected">Client: %1$s</string>
+    <string name="status_client_waiting">Waiting for desktop connection…</string>
+    <string name="encryption_ready">256-Bit AES-GCM: Ready</string>
+    <string name="encryption_pending">Awaiting ADB USB Handshake</string>
+    
+    <!-- Permission Cards -->
+    <string name="card_accessibility_title">Accessibility Bridge</string>
+    <string name="card_accessibility_desc">Required for DRM workaround view scraping &amp; remote touch injection.</string>
+    <string name="card_notification_title">Notification Access</string>
+    <string name="card_notification_desc">Allows mirroring incoming notifications and executing remote quick replies.</string>
+    <string name="card_overlay_title">Screen Privacy Overlay</string>
+    <string name="card_overlay_desc">Dims, blurs, or blacks out the phone screen during an active desktop session.</string>
+    <string name="card_battery_title">Battery Optimization</string>
+    <string name="card_battery_desc">Disables aggressive Doze mode to maintain background socket persistence.</string>
+    
+    <string name="btn_grant">Grant</string>
+    <string name="btn_granted">Granted</string>
+    <string name="switch_privacy_title">Screen Privacy Guard</string>
+    <string name="switch_privacy_desc">Black out phone screen while mirrored to Windows</string>
+    <string name="switch_server_title">Background TCP Server</string>
+    <string name="switch_server_desc">Toggle local socket listener (Port 8080)</string>
+    
+    <!-- Privacy Overlay -->
+    <string name="overlay_privacy_message">Screen is protected by Pixel Mirror</string>
+    <string name="overlay_privacy_sub">Interacting via Windows Desktop</string>
+</resources>
