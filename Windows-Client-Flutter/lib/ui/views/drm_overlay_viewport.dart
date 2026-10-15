@@ -41,7 +41,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.92),
+      color: Colors.black.withValues(alpha: 0.92),
       child: Stack(
         children: [
           // Dynamic Vector Phone Screen Bounds Canvas
@@ -55,7 +55,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
                   border: Border.all(color: Colors.grey[140], width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       blurRadius: 30,
                       spreadRadius: 5,
                     ),
@@ -77,7 +77,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
                             right: 16,
                             child: Row(
                               children: [
-                                const Icon(FluentIcons.shield, size: 14, color: Colors.blue),
+                                Icon(FluentIcons.shield, color: Colors.blue),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -116,12 +116,12 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.2),
+                  color: Colors.blue.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.5)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 10,
                     ),
                   ],
@@ -129,7 +129,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(FluentIcons.lock12, size: 14, color: Colors.blue),
+                    Icon(FluentIcons.lock12, color: Colors.blue),
                     const SizedBox(width: 8),
                     const Text(
                       'FLAG_SECURE Active: Dynamic Vector Engine Engaged',
@@ -142,7 +142,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
                     const SizedBox(width: 12),
                     Button(
                       style: ButtonStyle(
-                        padding: ButtonState.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                        padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
                       ),
                       onPressed: widget.onDismiss,
                       child: const Text('Return to Stream', style: TextStyle(fontSize: 11)),
@@ -181,7 +181,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
       control = FilledButton(
         onPressed: () => _onNodeClicked(node),
         style: ButtonStyle(
-          backgroundColor: ButtonState.all(Colors.blue),
+          backgroundColor: WidgetStateProperty.all(Colors.blue),
         ),
         child: Center(
           child: Text(
@@ -200,7 +200,7 @@ class _DrmOverlayViewportState extends State<DrmOverlayViewport> {
           alignment: Alignment.centerLeft,
           decoration: node.isClickable
               ? BoxDecoration(
-                  border: Border.all(color: Colors.grey[140].withOpacity(0.5)),
+                  border: Border.all(color: Colors.grey[140].withValues(alpha: 0.5)),
                   borderRadius: BorderRadius.circular(4),
                 )
               : null,

@@ -91,7 +91,7 @@ class _AppDrawerPanelState extends State<AppDrawerPanel> {
                 placeholder: 'Search apps...',
                 prefix: const Padding(
                   padding: EdgeInsets.only(left: 8),
-                  child: Icon(FluentIcons.search, size: 14),
+                  child: Icon(FluentIcons.search),
                 ),
               ),
             ),
@@ -119,7 +119,7 @@ class _AppDrawerPanelState extends State<AppDrawerPanel> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(FluentIcons.package, size: 48, color: Colors.grey),
+                      const Icon(FluentIcons.package, color: Colors.grey),
                       const SizedBox(height: 12),
                       const Text(
                         'No third-party packages found',
@@ -149,7 +149,8 @@ class _AppDrawerPanelState extends State<AppDrawerPanel> {
                     return Card(
                       padding: const EdgeInsets.all(12),
                       borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => _launchApp(app),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,22 +161,24 @@ class _AppDrawerPanelState extends State<AppDrawerPanel> {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.15),
+                                    color: Colors.blue.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     FluentIcons.app_icon_default,
-                                    size: 18,
                                     color: Colors.blue,
                                   ),
                                 ),
                                 const Spacer(),
                                 if (isLaunching)
-                                  const ProgressRing(strokeWidth: 2, size: 16)
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: ProgressRing(strokeWidth: 2),
+                                  )
                                 else
                                   const Icon(
                                     FluentIcons.open_in_new_window,
-                                    size: 12,
                                     color: Colors.grey,
                                   ),
                               ],

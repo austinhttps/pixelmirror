@@ -141,39 +141,40 @@ class _MainWindowState extends State<MainWindow> with WindowListener {
   @override
   Widget build(BuildContext context) {
     return NavigationView(
-      appBar: NavigationAppBar(
-        title: const DragToMoveArea(
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(
-              'Google Pixel 10 Mirror',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
+      pane: NavigationPane(
+        header: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: DragToMoveArea(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'Google Pixel 10 Mirror',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ),
+              StreamBuilder<ConnectionStateEnum>(
+                stream: widget.socketClient.stateStream,
+                initialData: widget.socketClient.state,
+                builder: (context, snapshot) {
+                  return StatusBadge(
+                    state: snapshot.data ?? ConnectionStateEnum.disconnected,
+                    deviceName: widget.socketClient.connectedDeviceName,
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(FluentIcons.usb),
+                onPressed: _handleUsbConnect,
+              ),
+            ],
           ),
         ),
-        actions: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            StreamBuilder<ConnectionStateEnum>(
-              stream: widget.socketClient.stateStream,
-              initialData: widget.socketClient.state,
-              builder: (context, snapshot) {
-                return StatusBadge(
-                  state: snapshot.data ?? ConnectionStateEnum.disconnected,
-                  deviceName: widget.socketClient.connectedDeviceName,
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            IconButton(
-              icon: const Icon(FluentIcons.usb, size: 16),
-              onPressed: _handleUsbConnect,
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-      pane: NavigationPane(
         selected: _selectedPaneIndex,
         onChanged: (index) => setState(() => _selectedPaneIndex = index),
         displayMode: PaneDisplayMode.compact,

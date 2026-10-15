@@ -1,5 +1,4 @@
 // lib/ui/views/quick_share_box.dart
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -110,11 +109,11 @@ class _QuickShareBoxState extends State<QuickShareBox> {
                 height: 240,
                 decoration: BoxDecoration(
                   color: _isDragging
-                      ? Colors.blue.withOpacity(0.15)
-                      : (FluentTheme.of(context).cardColor ?? Colors.grey[160]),
+                      ? Colors.blue.withValues(alpha: 0.15)
+                      : FluentTheme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _isDragging ? Colors.blue : Colors.grey[120].withOpacity(0.4),
+                    color: _isDragging ? Colors.blue : Colors.grey[120].withValues(alpha: 0.4),
                     width: _isDragging ? 2.5 : 1.5,
                   ),
                 ),
@@ -125,12 +124,11 @@ class _QuickShareBoxState extends State<QuickShareBox> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.12),
+                          color: Colors.blue.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           FluentIcons.share,
-                          size: 40,
                           color: Colors.blue,
                         ),
                       ),
@@ -152,7 +150,11 @@ class _QuickShareBoxState extends State<QuickShareBox> {
                       ),
                       if (_isUploading) ...[
                         const SizedBox(height: 16),
-                        const ProgressRing(size: 20, strokeWidth: 2),
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: ProgressRing(strokeWidth: 2),
+                        ),
                         const SizedBox(height: 8),
                         Text(_uploadStatus, style: const TextStyle(fontSize: 12)),
                       ],
@@ -185,7 +187,7 @@ class _QuickShareBoxState extends State<QuickShareBox> {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           child: Row(
                             children: [
-                              const Icon(FluentIcons.file_yomi, size: 16, color: Colors.blue),
+                              Icon(FluentIcons.page, color: Colors.blue),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -194,7 +196,7 @@ class _QuickShareBoxState extends State<QuickShareBox> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const Icon(FluentIcons.check_mark, size: 14, color: Colors.green),
+                              Icon(FluentIcons.check_mark, color: Colors.green),
                             ],
                           ),
                         );

@@ -118,7 +118,6 @@ class _DashboardControlsState extends State<DashboardControls> {
                         children: [
                           Icon(
                             isDnd ? FluentIcons.ringer_off : FluentIcons.ringer,
-                            size: 20,
                             color: isDnd ? Colors.orange : Colors.blue,
                           ),
                           const SizedBox(width: 10),
@@ -170,11 +169,11 @@ class _DashboardControlsState extends State<DashboardControls> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(FluentIcons.wifi, size: 20, color: Colors.blue),
+                          Icon(FluentIcons.wifi, color: Colors.blue),
                           const SizedBox(width: 10),
-                          Text(
+                          const Text(
                             'Toggle Phone Hotspot',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
@@ -191,7 +190,7 @@ class _DashboardControlsState extends State<DashboardControls> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(FluentIcons.open_in_new_window, size: 14),
+                            Icon(FluentIcons.open_in_new_window),
                             SizedBox(width: 8),
                             Text('Open Tethering Settings'),
                           ],
@@ -212,11 +211,11 @@ class _DashboardControlsState extends State<DashboardControls> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(FluentIcons.usb, size: 20, color: Colors.green),
+                          Icon(FluentIcons.usb, color: Colors.green),
                           const SizedBox(width: 10),
-                          Text(
+                          const Text(
                             'Physical USB Tunnel',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
@@ -233,7 +232,7 @@ class _DashboardControlsState extends State<DashboardControls> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(FluentIcons.link, size: 14),
+                            Icon(FluentIcons.link),
                             SizedBox(width: 8),
                             Text('Pair over USB Tunnel'),
                           ],
@@ -261,7 +260,7 @@ class _DashboardControlsState extends State<DashboardControls> {
             children: [
               Row(
                 children: [
-                  const Icon(FluentIcons.radar, size: 16, color: Colors.blue),
+                  Icon(FluentIcons.radio_bullet, color: Colors.blue),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
@@ -270,7 +269,11 @@ class _DashboardControlsState extends State<DashboardControls> {
                     ),
                   ),
                   if (_isConnecting)
-                    const ProgressRing(size: 16, strokeWidth: 2),
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: ProgressRing(strokeWidth: 2),
+                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -287,7 +290,7 @@ class _DashboardControlsState extends State<DashboardControls> {
                   itemBuilder: (context, index) {
                     final d = _discoveredDevices[index];
                     return ListTile(
-                      leading: const Icon(FluentIcons.cell_phone, color: Colors.blue),
+                      leading: Icon(FluentIcons.cell_phone, color: Colors.blue),
                       title: Text('${d.name} (${d.endpoint})'),
                       subtitle: Text('Discovered at ${d.discoveredAt.toLocal()}'),
                       trailing: FilledButton(

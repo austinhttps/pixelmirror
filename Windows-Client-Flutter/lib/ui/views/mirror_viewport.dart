@@ -1,6 +1,5 @@
 // lib/ui/views/mirror_viewport.dart
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -130,7 +129,7 @@ class _MirrorViewportState extends State<MirrorViewport> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.35),
+                      color: Colors.black.withValues(alpha: 0.35),
                       blurRadius: 24,
                       offset: const Offset(0, 8),
                     ),
@@ -184,9 +183,8 @@ class _MirrorViewportState extends State<MirrorViewport> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         FluentIcons.cell_phone,
-                                        size: 64,
                                         color: Colors.blue,
                                       ),
                                       const SizedBox(height: 12),
@@ -218,7 +216,6 @@ class _MirrorViewportState extends State<MirrorViewport> {
                                       children: [
                                         Icon(
                                           FluentIcons.plug_disconnected,
-                                          size: 48,
                                           color: Colors.grey[100],
                                         ),
                                         const SizedBox(height: 16),
@@ -248,21 +245,20 @@ class _MirrorViewportState extends State<MirrorViewport> {
                               // Drag & Drop Canvas Pasting Target Overlay
                               if (_isDraggingOver)
                                 Container(
-                                  color: Colors.blue.withOpacity(0.3),
+                                  color: Colors.blue.withValues(alpha: 0.3),
                                   child: Center(
                                     child: Container(
                                       padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.8),
+                                        color: Colors.black.withValues(alpha: 0.8),
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(color: Colors.blue),
                                       ),
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(
+                                          Icon(
                                             FluentIcons.cloud_upload,
-                                            size: 40,
                                             color: Colors.blue,
                                           ),
                                           const SizedBox(height: 8),
@@ -302,15 +298,15 @@ class _MirrorViewportState extends State<MirrorViewport> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.grey[140].withOpacity(0.3)),
+              border: Border.all(color: Colors.grey[140].withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: const Icon(FluentIcons.back, size: 16),
+                  icon: const Icon(FluentIcons.back),
                   onPressed: isConnected
                       ? () => widget.socketClient.sendRemoteInput(
                             targetX: 0,
@@ -321,7 +317,7 @@ class _MirrorViewportState extends State<MirrorViewport> {
                 ),
                 const SizedBox(width: 24),
                 IconButton(
-                  icon: const Icon(FluentIcons.circle_shape_solid, size: 14),
+                  icon: const Icon(FluentIcons.circle_shape_solid),
                   onPressed: isConnected
                       ? () => widget.socketClient.sendRemoteInput(
                             targetX: 0,
@@ -332,7 +328,7 @@ class _MirrorViewportState extends State<MirrorViewport> {
                 ),
                 const SizedBox(width: 24),
                 IconButton(
-                  icon: const Icon(FluentIcons.stop_solid, size: 14),
+                  icon: const Icon(FluentIcons.stop_solid),
                   onPressed: isConnected
                       ? () => widget.socketClient.sendRemoteInput(
                             targetX: 0,

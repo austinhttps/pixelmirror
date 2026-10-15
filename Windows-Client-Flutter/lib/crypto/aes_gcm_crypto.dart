@@ -12,7 +12,7 @@ class AesGcmEngine {
   static const int ivLengthBytes = 12; // 96-bit nonce
   static const int tagLengthBytes = 16; // 128-bit authentication tag
 
-  final AesGcm _algorithm = AesGcm.with256Bits();
+  final AesGcm _algorithm = AesGcm.with256bits();
   final Random _secureRandom = Random.secure();
 
   /// Generates a cryptographically secure random 256-bit AES key (Base64-encoded).

@@ -13,10 +13,11 @@ dependencies:
   # Windows 11 Fluent Design System
   fluent_ui: ^4.9.0
   flutter_acrylic: ^1.1.4
-  window_manager: ^0.3.9
+  window_manager: ^0.5.2
 
   # System Tray Integration
-  tray_manager: ^0.2.3
+  system_tray: ^2.0.3
+  tray_manager: ^0.8.0
 
   # Cryptography (256-bit AES-GCM conforming to API_CONTRACT.md)
   cryptography: ^2.7.0
@@ -24,7 +25,7 @@ dependencies:
 
   # Windows Native Notifications & Drag-and-Drop
   local_notifier: ^0.1.6
-  desktop_drop: ^0.4.4
+  desktop_drop: ^0.8.4
 
   # mDNS Auto-Discovery
   multicast_dns: ^0.3.2+6
@@ -33,14 +34,14 @@ dependencies:
   provider: ^6.1.2
   path: ^1.9.0
   path_provider: ^2.1.2
-  win32: ^5.5.0
+  win32: ^6.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
-  uses-material-design: false
+  uses-material-design: true
   assets:
     - assets/

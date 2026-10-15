@@ -1,6 +1,6 @@
 // lib/core/constants.dart
-/// Core system constants and protocol identifiers adhering to API_CONTRACT.md.
 
+/// Core system constants and protocol identifiers adhering to API_CONTRACT.md.
 class ProtocolConstants {
   // Protocol Version
   static const String protocolVersion = "1.0.0";

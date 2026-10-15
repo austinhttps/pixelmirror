@@ -1,10 +1,10 @@
 // lib/main.dart
+import 'dart:async';
 import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
 import 'package:window_manager/window_manager.dart';
 
-import 'core/constants.dart';
 import 'core/theme.dart';
 import 'network/adb_manager.dart';
 import 'network/mdns_discovery.dart';
@@ -16,9 +16,10 @@ import 'services/system_tray_manager.dart';
 import 'ui/views/main_window.dart';
 
 void main() async {
+  // 1. Ensure Flutter bindings are initialized first
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Windows 11 Mica / Acrylic Effect
+  // 2. Initialize Windows 11 Mica / Acrylic Effect
   if (Platform.isWindows) {
     try {
       await acrylic.Window.initialize();
@@ -31,7 +32,7 @@ void main() async {
     }
   }
 
-  // 2. Initialize Window Manager for desktop window controls & tray support
+  // 3. Initialize Window Manager for desktop window controls & frame
   try {
     await windowManager.ensureInitialized();
     const WindowOptions windowOptions = WindowOptions(
@@ -52,7 +53,7 @@ void main() async {
     debugPrint('[Window] Window manager initialization note: $e');
   }
 
-  // 3. Initialize Core Subsystems
+  // 4. Initialize Core Subsystems
   final SocketClient socketClient = SocketClient();
   final AdbManager adbManager = AdbManager();
   final MdnsDiscoveryManager mdnsDiscovery = MdnsDiscoveryManager();
@@ -65,31 +66,9 @@ void main() async {
   final ModeSyncService modeSyncService = ModeSyncService(
     socketClient: socketClient,
   );
+  final SystemTrayManager systemTrayManager = SystemTrayManager();
 
-  // Start background services
-  await notificationService.init();
-  clipboardSync.startSync();
-  modeSyncService.init();
-
-  // Start asynchronous mDNS Wireless Debugging discovery
-  await mdnsDiscovery.startDiscovery();
-
-  // 4. Initialize System Tray Manager (Section 1.2)
-  final SystemTrayManager trayManager = SystemTrayManager(
-    socketClient: socketClient,
-    adbManager: adbManager,
-    onToggleConnection: () async {
-      if (socketClient.isAuthorized) {
-        socketClient.disconnect();
-      } else {
-        // Toggle connection: attempt forward + connect
-        await adbManager.setupUsbTunnel();
-        await socketClient.connect();
-      }
-    },
-  );
-  await trayManager.init();
-
+  // 5. Mount widget tree immediately to prevent runtime UI lockup / blank screen
   runApp(PixelMirrorApp(
     socketClient: socketClient,
     adbManager: adbManager,
@@ -98,6 +77,38 @@ void main() async {
     clipboardSync: clipboardSync,
     modeSyncService: modeSyncService,
   ));
+
+  // 6. Wrap SystemTrayManager and background discovery inside a post-frame callback
+  // so it never blocks the primary widget tree rendering pass
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await systemTrayManager.initSystemTray();
+
+    // Lazy / asynchronous initialization of background services and discovery
+    try {
+      await notificationService.init();
+    } catch (e) {
+      debugPrint('[NotificationService] Post-frame initialization note: $e');
+    }
+
+    try {
+      clipboardSync.startSync();
+    } catch (e) {
+      debugPrint('[ClipboardSync] Post-frame start note: $e');
+    }
+
+    try {
+      modeSyncService.init();
+    } catch (e) {
+      debugPrint('[ModeSyncService] Post-frame init note: $e');
+    }
+
+    // Launch asynchronous mDNS Wireless Debugging auto-discovery without blocking the window loop
+    try {
+      unawaited(mdnsDiscovery.startDiscovery());
+    } catch (e) {
+      debugPrint('[mDNS] Asynchronous discovery launch note: $e');
+    }
+  });
 }
 
 class PixelMirrorApp extends StatefulWidget {

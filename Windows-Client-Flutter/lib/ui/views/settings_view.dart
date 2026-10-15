@@ -142,10 +142,10 @@ class _SettingsViewState extends State<SettingsView> {
         ),
         const SizedBox(height: 8),
         _buildSettingsCard(
-          icon: FluentIcons.radar,
+          icon: FluentIcons.radio_bullet,
           title: 'mDNS Wireless Debugging Service String',
           subtitle: 'Target: _adb-tls-connect._tcp',
-          action: const Text(
+          action: Text(
             'Active',
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
           ),
@@ -199,7 +199,7 @@ class _SettingsViewState extends State<SettingsView> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.blue),
+          Icon(icon, color: Colors.blue),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

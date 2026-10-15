@@ -33,7 +33,7 @@ class StatusBadge extends StatelessWidget {
       case ConnectionStateEnum.discovering:
         color = Colors.blue;
         text = 'Discovering mDNS...';
-        icon = FluentIcons.radar;
+        icon = FluentIcons.radio_bullet;
         break;
       case ConnectionStateEnum.error:
         color = Colors.red;
@@ -41,7 +41,6 @@ class StatusBadge extends StatelessWidget {
         icon = FluentIcons.error_badge;
         break;
       case ConnectionStateEnum.disconnected:
-      default:
         color = Colors.grey[100];
         text = 'Disconnected';
         icon = FluentIcons.plug_disconnected;
@@ -51,14 +50,14 @@ class StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, color: color),
           const SizedBox(width: 6),
           Text(
             text,
