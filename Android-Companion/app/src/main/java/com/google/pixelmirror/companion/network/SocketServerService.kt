@@ -1,9 +1,12 @@
 package com.google.pixelmirror.companion.network
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -13,16 +16,10 @@ import androidx.lifecycle.lifecycleScope
 import com.google.pixelmirror.companion.PixelMirrorApplication
 import com.google.pixelmirror.companion.R
 import com.google.pixelmirror.companion.model.ClipboardSyncData
-import com.google.pixelmirror.companion.model.FileDropData
-import com.google.pixelmirror.companion.model.HotspotRequestData
 import com.google.pixelmirror.companion.model.NotificationReplyData
-import com.google.pixelmirror.companion.model.SystemModeSyncData
-import com.google.pixelmirror.companion.service.ScreenPrivacyOverlayService
 import com.google.pixelmirror.companion.ui.MainActivity
 import com.google.pixelmirror.companion.util.ClipboardSyncHelper
-import com.google.pixelmirror.companion.util.FileDropHelper
 import com.google.pixelmirror.companion.util.NotificationReplyHelper
-import com.google.pixelmirror.companion.util.SystemActionHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -32,7 +29,7 @@ import java.net.Socket
 
 /**
  * High-performance background Foreground Service hosting the local TCP socket server
- * on port 8080 for desktop mirroring and inter-system synchronization.
+ * on port 8080 for notifications and clipboard synchronization.
  */
 class SocketServerService : LifecycleService() {
 
@@ -49,6 +46,23 @@ class SocketServerService : LifecycleService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Immediate Foreground Service promotion within onStartCommand
+        ensureNotificationChannel()
+        val notification = buildNotification(getString(R.string.notification_listening, DEFAULT_PORT))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                PixelMirrorApplication.SERVICE_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            )
+        } else {
+            startForeground(
+                PixelMirrorApplication.SERVICE_NOTIFICATION_ID,
+                notification
+            )
+        }
+
         super.onStartCommand(intent, flags, startId)
 
         val action = intent?.action
@@ -57,11 +71,6 @@ class SocketServerService : LifecycleService() {
             stopSelf()
             return START_NOT_STICKY
         }
-
-        startForeground(
-            PixelMirrorApplication.SERVICE_NOTIFICATION_ID,
-            buildNotification(getString(R.string.notification_listening, DEFAULT_PORT))
-        )
 
         startServer()
         return START_STICKY
@@ -87,22 +96,24 @@ class SocketServerService : LifecycleService() {
                         continue
                     }
 
-                    // Only allow one active desktop mirror session at a time for maximum bandwidth/security
-                    activeSession?.close()
+                    try {
+                        // Single-session tracking: Close previous session if any
+                        activeSession?.close()
 
-                    val session = ClientSession(
-                        context = applicationContext,
-                        socket = clientSocket,
-                        scope = lifecycleScope,
-                        onDisconnected = {
-                            activeSession = null
-                            SocketEventBus.updateStatus(ConnectionStatus.LISTENING)
-                            // Remove screen privacy overlay when client disconnects
-                            ScreenPrivacyOverlayService.stopOverlay(applicationContext)
-                        }
-                    )
-                    activeSession = session
-                    session.start()
+                        val session = ClientSession(
+                            context = applicationContext,
+                            socket = clientSocket,
+                            scope = lifecycleScope,
+                            onDisconnected = {
+                                activeSession = null
+                                SocketEventBus.updateStatus(ConnectionStatus.LISTENING)
+                            }
+                        )
+                        activeSession = session
+                        session.start()
+                    } catch (e: Exception) {
+                        Log.e(tag, "Client session handling error: ${e.message}", e)
+                    }
                 }
 
             } catch (e: Exception) {
@@ -118,19 +129,10 @@ class SocketServerService : LifecycleService() {
                 when (status) {
                     ConnectionStatus.LISTENING -> {
                         updateNotification(getString(R.string.notification_listening, DEFAULT_PORT))
-                        ScreenPrivacyOverlayService.stopOverlay(applicationContext)
                     }
                     ConnectionStatus.AUTHORIZED -> {
                         val ip = SocketEventBus.connectedClientIp.value ?: "Desktop"
                         updateNotification(getString(R.string.notification_connected, ip))
-
-                        // Section 1.4: Screen Privacy Handler (Dim/blur phone canvas when mirrored)
-                        if (SocketEventBus.isScreenPrivacyEnabled.value) {
-                            ScreenPrivacyOverlayService.startOverlay(applicationContext)
-                        }
-                    }
-                    ConnectionStatus.STOPPED -> {
-                        ScreenPrivacyOverlayService.stopOverlay(applicationContext)
                     }
                     else -> Unit
                 }
@@ -153,24 +155,31 @@ class SocketServerService : LifecycleService() {
                         val clip = ClipboardSyncData.fromJson(packet.data)
                         ClipboardSyncHelper.updateSystemClipboard(applicationContext, clip.text)
                     }
-                    "FILE_DROP" -> {
-                        val fileDrop = FileDropData.fromJson(packet.data)
-                        FileDropHelper.handleIncomingFile(applicationContext, fileDrop)
-                    }
-                    "HOTSPOT_REQUEST" -> {
-                        val hotspot = HotspotRequestData.fromJson(packet.data)
-                        SystemActionHelper.handleHotspotRequest(applicationContext, hotspot)
-                    }
-                    "SYSTEM_MODE_SYNC" -> {
-                        val mode = SystemModeSyncData.fromJson(packet.data)
-                        SystemActionHelper.handleModeSync(applicationContext, mode)
-                    }
                 }
             }
         }
     }
 
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (manager != null && manager.getNotificationChannel(CHANNEL_STREAM_ID) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_STREAM_ID,
+                    getString(R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = getString(R.string.notification_channel_desc)
+                    setShowBadge(false)
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
     private fun buildNotification(contentText: String): Notification {
+        ensureNotificationChannel()
+
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -191,12 +200,12 @@ class SocketServerService : LifecycleService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, PixelMirrorApplication.CHANNEL_SERVICE_ID)
+        return NotificationCompat.Builder(this, CHANNEL_STREAM_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_mirror_tile)
             .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_visibility_off, "Stop", stopPendingIntent)
+            .addAction(R.drawable.ic_cell_tower, "Stop", stopPendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -205,7 +214,7 @@ class SocketServerService : LifecycleService() {
 
     private fun updateNotification(contentText: String) {
         val notification = buildNotification(contentText)
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(PixelMirrorApplication.SERVICE_NOTIFICATION_ID, notification)
     }
 
@@ -219,7 +228,6 @@ class SocketServerService : LifecycleService() {
         serverJob?.cancel()
         serverJob = null
         SocketEventBus.updateStatus(ConnectionStatus.STOPPED)
-        ScreenPrivacyOverlayService.stopOverlay(applicationContext)
     }
 
     override fun onDestroy() {
@@ -235,6 +243,7 @@ class SocketServerService : LifecycleService() {
 
     companion object {
         const val DEFAULT_PORT = 8080
+        const val CHANNEL_STREAM_ID = "pixel_mirror_stream"
         const val ACTION_START_SERVER = "com.google.pixelmirror.action.START_SERVER"
         const val ACTION_STOP_SERVER = "com.google.pixelmirror.action.STOP_SERVER"
 

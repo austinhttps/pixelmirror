@@ -61,7 +61,8 @@ object CryptoManager {
     @Synchronized
     fun registerSessionKey(context: Context?, secretKeyB64: String): Boolean {
         return try {
-            val parsed = AesGcmCrypto.parseSecretKey(secretKeyB64)
+            val trimmedKey = secretKeyB64.trim()
+            val parsed = AesGcmCrypto.parseSecretKey(trimmedKey)
             activeSecretKey = parsed
             isAuthorizedState.set(true)
 
@@ -77,7 +78,7 @@ object CryptoManager {
                         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                     )
-                    prefs.edit().putString(KEY_SECRET_B64, secretKeyB64).apply()
+                    prefs.edit().putString(KEY_SECRET_B64, trimmedKey).apply()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to persist key in secure storage: ${e.message}")
                 }

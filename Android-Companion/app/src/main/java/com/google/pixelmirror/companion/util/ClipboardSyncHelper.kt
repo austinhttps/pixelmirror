@@ -11,14 +11,17 @@ import com.google.pixelmirror.companion.network.ConnectionStatus
 import com.google.pixelmirror.companion.network.SocketEventBus
 
 /**
- * Section 3.2: Clipboard Syncing Utility.
+ * Bidirectional Clipboard Synchronization Utility.
  * Symmetrically syncs the copy-paste stack between Android and Windows
- * using ClipboardManager.setPrimaryClip() and primary clip changed listeners.
+ * using ClipboardManager.setPrimaryClip() and primary clip changed listeners,
+ * preventing echo feedback loops.
  */
 object ClipboardSyncHelper {
 
     private const val tag = "ClipboardSyncHelper"
-    private var lastSyncedText: String? = null
+    private var lastSyncedHash: Int? = null
+    private var lastReceivedFromPcHash: Int? = null
+    private var lastReceivedFromPcTimestamp: Long = 0L
     private var clipboardManager: ClipboardManager? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -33,9 +36,15 @@ object ClipboardSyncHelper {
             val clip = clipboardManager?.primaryClip ?: return@addPrimaryClipChangedListener
             if (clip.itemCount > 0) {
                 val text = clip.getItemAt(0).text?.toString() ?: return@addPrimaryClipChangedListener
-                if (text != lastSyncedText && text.isNotBlank()) {
-                    lastSyncedText = text
-                    Log.d(tag, "Local clipboard changed. Dispatching to Windows: '$text'")
+                val currentHash = text.hashCode()
+
+                // Echo loop prevention: check if this clip was just set from PC
+                val isRecentPcClip = currentHash == lastReceivedFromPcHash &&
+                        (System.currentTimeMillis() - lastReceivedFromPcTimestamp) < 3000L
+
+                if (currentHash != lastSyncedHash && !isRecentPcClip && text.isNotBlank()) {
+                    lastSyncedHash = currentHash
+                    Log.d(tag, "Local Android clipboard changed. Dispatching CLIPBOARD_SYNC: '$text'")
                     SocketEventBus.postOutbound(ClipboardSyncData(text).toEventPacket())
                 }
             }
@@ -46,13 +55,18 @@ object ClipboardSyncHelper {
      * Updates Android system clipboard with text received from Windows desktop.
      */
     fun updateSystemClipboard(context: Context, text: String) {
-        if (text.isBlank() || text == lastSyncedText) return
+        if (text.isBlank()) return
+        val textHash = text.hashCode()
+        if (textHash == lastSyncedHash) return
 
         mainHandler.post {
             try {
                 val manager = clipboardManager
                     ?: (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                lastSyncedText = text
+                lastSyncedHash = textHash
+                lastReceivedFromPcHash = textHash
+                lastReceivedFromPcTimestamp = System.currentTimeMillis()
+
                 val clip = ClipData.newPlainText("Pixel Mirror Sync", text)
                 manager.setPrimaryClip(clip)
                 Log.i(tag, "Phone clipboard updated from Windows: '$text'")

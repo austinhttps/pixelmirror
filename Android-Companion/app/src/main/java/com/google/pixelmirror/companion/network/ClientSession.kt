@@ -18,6 +18,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import kotlin.jvm.Synchronized
 
 /**
  * Manages an individual client TCP connection lifecycle, cryptographic handshake,
@@ -77,7 +78,11 @@ class ClientSession(
      */
     private fun performHandshake(): Boolean {
         return try {
-            val rawMessage = readNextJsonChunk() ?: return false
+            val rawMessage = readNextLineSafe()
+            if (rawMessage.isNullOrBlank()) {
+                Log.w(tag, "Null or blank line received during handshake challenge from $clientIp")
+                return false
+            }
             Log.d(tag, "Handshake raw payload received: $rawMessage")
 
             val json = JSONObject(rawMessage)
@@ -92,7 +97,6 @@ class ClientSession(
             val keyRegistered = CryptoManager.registerSessionKey(context, handshakeInit.secretKeyB64)
 
             if (!keyRegistered) {
-                // Send unauthorized and drop
                 val failResponse = HandshakeResponse(status = "UNAUTHORIZED")
                 sendRaw(failResponse.toJson().toString())
                 return false
@@ -113,6 +117,7 @@ class ClientSession(
 
     /**
      * Collects outbound packets from SocketEventBus and flushes them across the socket.
+     * Encrypts outgoing frames via 256-bit AES-GCM when session is authorized.
      */
     private fun startOutboundLoop() {
         writeJob = scope.launch(Dispatchers.IO) {
@@ -121,7 +126,12 @@ class ClientSession(
 
                 try {
                     val rawJson = packet.toJson().toString()
-                    sendRaw(rawJson)
+                    val payloadToSend = if (CryptoManager.isAuthorized) {
+                        CryptoManager.encryptPayload(rawJson)
+                    } else {
+                        rawJson
+                    }
+                    sendRaw(payloadToSend)
                     Log.d(tag, "Sent outbound event: ${packet.eventType}")
                 } catch (e: Exception) {
                     Log.e(tag, "Failed to send outbound packet: ${e.message}")
@@ -135,13 +145,15 @@ class ClientSession(
      */
     private fun readInboundLoop() {
         while (scope.isActive && !socket.isClosed) {
-            val chunk = readNextJsonChunk() ?: break
+            val chunk = readNextLineSafe() ?: break
+            if (chunk.isEmpty()) continue
+
             try {
                 // Parse either plaintext or decrypt payload
                 val packetJson = if (chunk.startsWith("{") && chunk.contains("\"event_type\"")) {
                     JSONObject(chunk)
                 } else {
-                    // Decrypt encrypted payload if applicable
+                    // Decrypt encrypted payload
                     val decryptedString = CryptoManager.decryptPayload(chunk)
                     JSONObject(decryptedString)
                 }
@@ -157,56 +169,34 @@ class ClientSession(
     }
 
     /**
-     * Sends a raw string chunk across the TCP socket.
+     * Sends a raw string chunk across the TCP socket with newline delimiter and immediate flush.
      */
-    private synchronized fun sendRaw(message: String) {
+    @Synchronized
+    private fun sendRaw(message: String) {
         val out = writer ?: return
         out.write(message)
-        out.newLine() // Delimit chunks cleanly
+        out.newLine() // Strictly newline-delimited frame
         out.flush()
     }
 
     /**
-     * Reads a complete JSON object from the stream, handling buffer chunks or line breaks.
+     * Safely reads the next newline-delimited string from the client BufferedReader stream.
+     * Logs string reception or null lines gracefully without crashing or self-closing prematurely.
      */
-    private fun readNextJsonChunk(): String? {
+    private fun readNextLineSafe(): String? {
         val inStream = reader ?: return null
-        val buffer = CharArray(4096)
-        val sb = StringBuilder()
-        var braceDepth = 0
-        var inString = false
-        var isEscaped = false
-        var objectStarted = false
-
-        while (true) {
-            val charsRead = inStream.read(buffer)
-            if (charsRead == -1) {
-                if (sb.isNotEmpty()) return sb.toString().trim()
-                return null
+        return try {
+            val line = inStream.readLine()
+            if (line != null) {
+                Log.d(tag, "Safe line reader received payload from $clientIp: $line")
+                line.trim()
+            } else {
+                Log.i(tag, "Client stream ($clientIp) closed or sent null line gracefully.")
+                null
             }
-
-            for (i in 0 until charsRead) {
-                val c = buffer[i]
-                sb.append(c)
-
-                if (c == '"' && !isEscaped) {
-                    inString = !inString
-                } else if (c == '\\' && inString) {
-                    isEscaped = !isEscaped
-                    continue
-                } else if (!inString) {
-                    if (c == '{') {
-                        braceDepth++
-                        objectStarted = true
-                    } else if (c == '}') {
-                        braceDepth--
-                        if (objectStarted && braceDepth == 0) {
-                            return sb.toString().trim()
-                        }
-                    }
-                }
-                isEscaped = false
-            }
+        } catch (e: Exception) {
+            Log.w(tag, "Safe line reader caught exception reading from $clientIp: ${e.message}")
+            null
         }
     }
 

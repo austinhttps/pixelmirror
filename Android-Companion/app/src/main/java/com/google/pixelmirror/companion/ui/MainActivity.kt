@@ -1,6 +1,5 @@
 package com.google.pixelmirror.companion.ui
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -8,7 +7,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
@@ -19,22 +17,20 @@ import com.google.pixelmirror.companion.databinding.ActivityMainBinding
 import com.google.pixelmirror.companion.network.ConnectionStatus
 import com.google.pixelmirror.companion.network.SocketEventBus
 import com.google.pixelmirror.companion.network.SocketServerService
-import com.google.pixelmirror.companion.service.MirrorAccessibilityService
 import com.google.pixelmirror.companion.service.MirrorNotificationListenerService
 import com.google.pixelmirror.companion.util.ClipboardSyncHelper
 import kotlinx.coroutines.launch
 
 /**
- * Section 5: Material Design 3 UI Aesthetics Dashboard.
- * Inherits the active system wallpaper palette of the Pixel 10 via DynamicColors,
- * featuring 24dp rounded cards and native Material motion switches.
+ * Pixel Mirror V1 Dashboard.
+ * Inherits active system wallpaper palette of the Pixel 10 via DynamicColors,
+ * displaying socket status, 256-bit AES-GCM security, and permission clearance.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Section 5: DynamicColors integration
         DynamicColors.applyToActivityIfAvailable(this)
 
         super.onCreate(savedInstanceState)
@@ -44,6 +40,19 @@ class MainActivity : AppCompatActivity() {
         // Initialize cryptography and clipboard sync listeners
         CryptoManager.init(applicationContext)
         ClipboardSyncHelper.init(applicationContext)
+
+        // Auto-start TCP Socket Server Service immediately on application launch
+        SocketServerService.start(this)
+
+        // Check if notification access clearance is granted; if not, prompt user
+        val enabledListeners = Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners"
+        )
+        if (enabledListeners == null || !enabledListeners.contains(packageName)) {
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            startActivity(intent)
+        }
 
         setupListeners()
         observeState()
@@ -66,32 +75,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Screen Privacy Guard Switch
-        binding.switchPrivacyGuard.setOnCheckedChangeListener { _, isChecked ->
-            SocketEventBus.setScreenPrivacyEnabled(isChecked)
-        }
-
-        // Accessibility Service Button
-        binding.btnGrantAccessibility.setOnClickListener {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            startActivity(intent)
-        }
-
-        // Notification Listener Button
+        // Notification Listener Clearance Button
         binding.btnGrantNotifications.setOnClickListener {
             val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             startActivity(intent)
-        }
-
-        // Screen Privacy Overlay Button
-        binding.btnGrantOverlay.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                startActivity(intent)
-            }
         }
 
         // Battery Optimization Whitelist Button
@@ -156,39 +143,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updatePermissionStates() {
-        // 1. Accessibility Service check
-        val isA11yGranted = isAccessibilityServiceEnabled(MirrorAccessibilityService::class.java)
-        binding.btnGrantAccessibility.text = if (isA11yGranted) getString(R.string.btn_granted) else getString(R.string.btn_grant)
-        binding.btnGrantAccessibility.isEnabled = !isA11yGranted
-
-        // 2. Notification Listener check
+        // Notification Listener check
         val isNotifGranted = isNotificationServiceEnabled(MirrorNotificationListenerService::class.java)
         binding.btnGrantNotifications.text = if (isNotifGranted) getString(R.string.btn_granted) else getString(R.string.btn_grant)
         binding.btnGrantNotifications.isEnabled = !isNotifGranted
 
-        // 3. Overlay check
-        val isOverlayGranted = Settings.canDrawOverlays(this)
-        binding.btnGrantOverlay.text = if (isOverlayGranted) getString(R.string.btn_granted) else getString(R.string.btn_grant)
-        binding.btnGrantOverlay.isEnabled = !isOverlayGranted
-
-        // 4. Battery Optimization check
+        // Battery Optimization check
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         val isBatteryIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             powerManager.isIgnoringBatteryOptimizations(packageName)
         } else true
         binding.btnGrantBattery.text = if (isBatteryIgnored) getString(R.string.btn_granted) else getString(R.string.btn_grant)
         binding.btnGrantBattery.isEnabled = !isBatteryIgnored
-    }
-
-    private fun isAccessibilityServiceEnabled(serviceClass: Class<*>): Boolean {
-        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        for (service in enabledServices) {
-            if (service.resolveInfo.serviceInfo.name == serviceClass.name) {
-                return true
-            }
-        }
-        return false
     }
 
     private fun isNotificationServiceEnabled(serviceClass: Class<*>): Boolean {

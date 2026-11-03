@@ -40,7 +40,7 @@ class PixelMirrorApplication : Application() {
     }
 
     companion object {
-        const val CHANNEL_SERVICE_ID = "pixel_mirror_service_channel"
+        const val CHANNEL_SERVICE_ID = "pixel_mirror_stream"
         const val SERVICE_NOTIFICATION_ID = 1001
     }
 }
