@@ -45,8 +45,8 @@ def run_apk_server():
                 "notification_id": 4012,
                 "package_name": "com.google.android.apps.messaging",
                 "app_label": "Messages",
-                "title": "Tara Sheridan Qualey",
-                "body": "Hey Austin! Did you finish syncing the GitHub repo?",
+                "title": "John Doe",
+                "body": "Hey! Did you finish syncing the GitHub repo?",
                 "icon_base64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHe..."
             }
         }
