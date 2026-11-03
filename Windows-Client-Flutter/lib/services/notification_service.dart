@@ -37,82 +37,55 @@ class NativeNotificationService {
   void handleIncomingNotification(NotificationEnqueueData data) {
     debugPrint('[NotificationService] Incoming alert from ${data.appLabel}: ${data.title} - ${data.body}');
 
+    // Avoid duplicates of the same notification ID
+    _recentNotifications.removeWhere((item) =>
+        item.notificationId == data.notificationId && item.packageName == data.packageName);
+
     _recentNotifications.insert(0, data);
     if (_recentNotifications.length > 50) {
       _recentNotifications.removeLast();
     }
     _inAppNotificationStream.add(data);
 
-    // Show native Windows 11 toast notification with quick-reply
+    // Show native Windows toast notification
     _showWindowsToast(data);
+  }
+
+  void clearNotifications() {
+    _recentNotifications.clear();
+  }
+
+  void removeNotification(int notificationId, String packageName) {
+    _recentNotifications.removeWhere((item) =>
+        item.notificationId == notificationId && item.packageName == packageName);
   }
 
   Future<void> _showWindowsToast(NotificationEnqueueData data) async {
     if (!Platform.isWindows) return;
 
     try {
-      // 1. Attempt PowerShell WinRT native Windows 11 interactive toast with inline quick reply
-      final bool scriptSuccess = await _showInteractiveWin11ToastWithQuickReply(data);
-      if (scriptSuccess) return;
-
-      // 2. Fallback to standard local_notifier toast
       final LocalNotification notification = LocalNotification(
-        identifier: '${data.packageName}_${data.notificationId}',
+        identifier: '${data.packageName}:::${data.notificationId}',
         title: '${data.appLabel}: ${data.title}',
         body: data.body,
         actions: [
-          LocalNotificationAction(text: 'Quick Reply'),
+          LocalNotificationAction(text: 'Reply'),
         ],
       );
 
       notification.onClickAction = (actionIndex) {
-        debugPrint('[NotificationService] User clicked notification action.');
+        debugPrint('[NotificationService] User clicked notification action on toast: $actionIndex');
+        _inAppNotificationStream.add(data);
+      };
+
+      notification.onClick = () {
+        debugPrint('[NotificationService] User clicked notification toast');
+        _inAppNotificationStream.add(data);
       };
 
       await notification.show();
     } catch (e) {
       debugPrint('[NotificationService] Error showing toast notification: $e');
-    }
-  }
-
-  /// Displays a true native Windows 11 Toast with inline text input using WinRT XML Toast schema.
-  Future<bool> _showInteractiveWin11ToastWithQuickReply(NotificationEnqueueData data) async {
-    try {
-      final String safeTitle = data.title.replaceAll('"', '`"').replaceAll("'", "''");
-      final String safeBody = data.body.replaceAll('"', '`"').replaceAll("'", "''");
-      final String safeApp = data.appLabel.replaceAll('"', '`"').replaceAll("'", "''");
-
-      // PowerShell script invoking Windows.UI.Notifications WinRT API with input element
-      final String psScript = '''
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > \$null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > \$null
-
-\$template = @"
-<toast>
-    <visual>
-        <binding template="ToastGeneric">
-            <text>$safeApp - $safeTitle</text>
-            <text>$safeBody</text>
-        </binding>
-    </visual>
-    <actions>
-        <input id="quickReplyText" type="text" placeHolderContent="Type a quick reply to phone..." />
-        <action content="Reply" arguments="action=reply&amp;id=${data.notificationId}&amp;pkg=${data.packageName}" activationType="background" />
-    </actions>
-</toast>
-"@
-
-\$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-\$xml.LoadXml(\$template)
-\$toast = [Windows.UI.Notifications.ToastNotification]::new(\$xml)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Pixel 10 Mirror").Show(\$toast)
-''';
-
-      final ProcessResult result = await Process.run('powershell', ['-NoProfile', '-Command', psScript]);
-      return result.exitCode == 0;
-    } catch (e) {
-      debugPrint('[NotificationService] Failed PowerShell WinRT toast: $e');
-      return false;
     }
   }
 

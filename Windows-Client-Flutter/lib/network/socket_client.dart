@@ -8,16 +8,21 @@ import '../crypto/aes_gcm_crypto.dart';
 import '../models/contract_models.dart';
 
 /// Production-ready TCP Client managing connection, 256-bit AES-GCM cryptographic handshake,
-/// streaming, packet validation, and bidirectional protocol communication.
+/// streaming, packet validation, bidirectional protocol communication, and auto-reconnect.
 class SocketClient {
   final AesGcmEngine _crypto = AesGcmEngine();
 
   Socket? _socket;
   ConnectionStateEnum _state = ConnectionStateEnum.disconnected;
   String _sessionKeyB64 = '';
-  String _connectedDeviceName = '';
+  String _connectedDeviceName = ProtocolConstants.defaultDeviceName;
   String _host = ProtocolConstants.loopbackHost;
   int _port = ProtocolConstants.defaultSocketPort;
+
+  // Auto-reconnect state
+  bool _enableAutoReconnect = true;
+  bool _manualDisconnect = false;
+  Timer? _reconnectTimer;
 
   final StreamController<ConnectionStateEnum> _stateController =
       StreamController<ConnectionStateEnum>.broadcast();
@@ -25,10 +30,6 @@ class SocketClient {
       StreamController<EventPacket>.broadcast();
   final StreamController<NotificationEnqueueData> _notificationController =
       StreamController<NotificationEnqueueData>.broadcast();
-  final StreamController<SecureWindowMapData> _secureWindowController =
-      StreamController<SecureWindowMapData>.broadcast();
-  final StreamController<SystemModeSyncData> _modeSyncController =
-      StreamController<SystemModeSyncData>.broadcast();
   final StreamController<ClipboardSyncData> _clipboardController =
       StreamController<ClipboardSyncData>.broadcast();
 
@@ -36,8 +37,6 @@ class SocketClient {
   Stream<ConnectionStateEnum> get stateStream => _stateController.stream;
   Stream<EventPacket> get onPacketReceived => _packetController.stream;
   Stream<NotificationEnqueueData> get onNotification => _notificationController.stream;
-  Stream<SecureWindowMapData> get onSecureWindowMap => _secureWindowController.stream;
-  Stream<SystemModeSyncData> get onModeSync => _modeSyncController.stream;
   Stream<ClipboardSyncData> get onClipboardSync => _clipboardController.stream;
 
   ConnectionStateEnum get state => _state;
@@ -46,9 +45,17 @@ class SocketClient {
   String get connectedDeviceName => _connectedDeviceName;
   String get currentHost => _host;
   int get currentPort => _port;
+  bool get enableAutoReconnect => _enableAutoReconnect;
+
+  set enableAutoReconnect(bool val) {
+    _enableAutoReconnect = val;
+    if (!val) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+    }
+  }
 
   SocketClient() {
-    // Generate initial unique 256-bit AES key for the desktop client
     _sessionKeyB64 = _crypto.generateKeyBase64();
     debugPrint('[Crypto] Generated initial 256-bit AES-GCM session key: $_sessionKeyB64');
   }
@@ -68,6 +75,10 @@ class SocketClient {
     if (_state == ConnectionStateEnum.authorized || _state == ConnectionStateEnum.connecting) {
       return true;
     }
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _manualDisconnect = false;
 
     _host = host;
     _port = port;
@@ -122,7 +133,7 @@ class SocketClient {
                   }
                 }
               } else if (char == '\n' && !objectStarted) {
-                // Potential Base64 encrypted packet line
+                // Base64 encrypted packet line
                 final String line = buffer.toString().trim();
                 buffer.clear();
                 if (line.isNotEmpty) {
@@ -154,14 +165,17 @@ class SocketClient {
       final HandshakeInit initPayload = HandshakeInit(
         secretKeyB64: _sessionKeyB64,
       );
-      _sendRaw(jsonEncode(initPayload.toJson()));
+      final String handshakePayload = jsonEncode(initPayload.toJson());
+      debugPrint('[Socket] Writing HANDSHAKE_INIT unencrypted JSON payload with trailing newline');
+      _socket!.write('$handshakePayload\n');
+      await _socket!.flush();
 
       // Await handshake completion with timeout
       final bool success = await handshakeCompleter.future.timeout(
         const Duration(seconds: 4),
         onTimeout: () {
           debugPrint('[Socket] Handshake challenge timed out.');
-          disconnect();
+          disconnect(manual: false);
           return false;
         },
       );
@@ -172,13 +186,13 @@ class SocketClient {
         return true;
       } else {
         _updateState(ConnectionStateEnum.error);
-        disconnect();
+        disconnect(manual: false);
         return false;
       }
     } catch (e) {
       debugPrint('[Socket] Connection failed to $_host:$_port: $e');
       _updateState(ConnectionStateEnum.error);
-      disconnect();
+      _handleDisconnection();
       return false;
     }
   }
@@ -235,14 +249,6 @@ class SocketClient {
           final NotificationEnqueueData notif = NotificationEnqueueData.fromJson(packet.data);
           _notificationController.add(notif);
           break;
-        case ProtocolConstants.eventSecureWindowMap:
-          final SecureWindowMapData windowMap = SecureWindowMapData.fromJson(packet.data);
-          _secureWindowController.add(windowMap);
-          break;
-        case ProtocolConstants.eventSystemModeSync:
-          final SystemModeSyncData mode = SystemModeSyncData.fromJson(packet.data);
-          _modeSyncController.add(mode);
-          break;
         case ProtocolConstants.eventClipboardSync:
           final ClipboardSyncData clip = ClipboardSyncData.fromJson(packet.data);
           _clipboardController.add(clip);
@@ -268,10 +274,10 @@ class SocketClient {
           plaintext: rawJson,
           secretKeyB64: _sessionKeyB64,
         );
-        _sendRaw(encryptedB64);
+        await _sendRaw(encryptedB64);
         debugPrint('[Socket] Sent AES-GCM encrypted packet: ${packet.eventType}');
       } else {
-        _sendRaw(rawJson);
+        await _sendRaw(rawJson);
         debugPrint('[Socket] Sent plaintext packet: ${packet.eventType}');
       }
     } catch (e) {
@@ -293,71 +299,16 @@ class SocketClient {
     await sendPacket(reply.toEventPacket());
   }
 
-  /// Section 3.2: Dynamic Action / Remote Input
-  Future<void> sendRemoteInput({
-    required int targetX,
-    required int targetY,
-    String actionType = ProtocolConstants.actionClickCoordinate,
-  }) async {
-    final RemoteInputActionData input = RemoteInputActionData(
-      actionType: actionType,
-      targetX: targetX,
-      targetY: targetY,
-    );
-    await sendPacket(input.toEventPacket());
-  }
-
-  /// Section 3.3 & 3.4: Smart File Drop & Quick Share
-  Future<void> sendFileDrop({
-    required String filename,
-    required Uint8List fileBytes,
-    int targetX = -1,
-    int targetY = -1,
-    bool isCanvasPaste = true,
-    String mimeType = 'application/octet-stream',
-  }) async {
-    final String b64 = base64Encode(fileBytes);
-    final FileDropData fileDrop = FileDropData(
-      filename: filename,
-      mimeType: mimeType,
-      fileBase64: b64,
-      targetX: targetX,
-      targetY: targetY,
-      isCanvasPaste: isCanvasPaste,
-    );
-    await sendPacket(fileDrop.toEventPacket());
-  }
-
-  /// Section 4.1: Phone Mode Toggle
-  Future<void> sendModeSync({
-    required String modeType,
-    required bool isEnabled,
-  }) async {
-    final SystemModeSyncData mode = SystemModeSyncData(
-      modeType: modeType,
-      isEnabled: isEnabled,
-    );
-    await sendPacket(mode.toEventPacket());
-  }
-
-  /// Section 4.2: Hotspot Trigger Request
-  Future<void> sendHotspotRequest({
-    String action = ProtocolConstants.actionLaunchTetherSettings,
-  }) async {
-    final HotspotRequestData req = HotspotRequestData(action: action);
-    await sendPacket(req.toEventPacket());
-  }
-
   /// Symmetrically sync PC clipboard down to phone
   Future<void> sendClipboard(String text) async {
     final ClipboardSyncData clip = ClipboardSyncData(text: text);
     await sendPacket(clip.toEventPacket());
   }
 
-  void _sendRaw(String message) {
+  Future<void> _sendRaw(String message) async {
     if (_socket != null) {
       _socket!.write('$message\n');
-      _socket!.flush();
+      await _socket!.flush();
     }
   }
 
@@ -372,19 +323,40 @@ class SocketClient {
       _socket?.destroy();
     } catch (_) {}
     _socket = null;
+
+    // Schedule auto-reconnect if enabled and not manually disconnected
+    if (_enableAutoReconnect && !_manualDisconnect) {
+      _scheduleReconnect();
+    }
   }
 
-  void disconnect() {
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    debugPrint('[Socket] Auto-reconnect scheduled in 3 seconds...');
+    _reconnectTimer = Timer(const Duration(seconds: 3), () async {
+      if (_state == ConnectionStateEnum.disconnected && _enableAutoReconnect && !_manualDisconnect) {
+        debugPrint('[Socket] Attempting auto-reconnect to $_host:$_port...');
+        await connect(host: _host, port: _port);
+      }
+    });
+  }
+
+  void disconnect({bool manual = true}) {
+    _manualDisconnect = manual;
+    if (manual) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+    }
     _handleDisconnection();
   }
 
   void dispose() {
-    disconnect();
+    _enableAutoReconnect = false;
+    _reconnectTimer?.cancel();
+    disconnect(manual: true);
     _stateController.close();
     _packetController.close();
     _notificationController.close();
-    _secureWindowController.close();
-    _modeSyncController.close();
     _clipboardController.close();
   }
 }

@@ -14,12 +14,31 @@ class ClipboardSyncService {
   Timer? _clipboardPollTimer;
   StreamSubscription? _sub;
   bool _isSyncing = false;
+  bool _autoSyncEnabled = true;
 
   final StreamController<String> _clipboardEvents = StreamController<String>.broadcast();
   Stream<String> get onClipboardSynced => _clipboardEvents.stream;
   String get lastSyncedText => _lastSyncedText;
+  bool get isAutoSyncEnabled => _autoSyncEnabled;
 
   ClipboardSyncService({required this.socketClient});
+
+  void setAutoSync(bool enabled) {
+    _autoSyncEnabled = enabled;
+    if (!enabled) {
+      _clipboardPollTimer?.cancel();
+      _clipboardPollTimer = null;
+      debugPrint('[ClipboardSync] Automatic background clipboard polling paused.');
+    } else {
+      if (_isSyncing && _clipboardPollTimer == null) {
+        _clipboardPollTimer = Timer.periodic(
+          const Duration(milliseconds: 700),
+          (_) => _checkWindowsClipboard(),
+        );
+        debugPrint('[ClipboardSync] Automatic background clipboard polling resumed.');
+      }
+    }
+  }
 
   void startSync({Duration pollInterval = const Duration(milliseconds: 700)}) {
     if (_isSyncing) return;
@@ -30,13 +49,15 @@ class ClipboardSyncService {
       _handleInboundClipboard(data.text);
     });
 
-    // 2. Poll Windows OS clipboard for local changes
-    _clipboardPollTimer = Timer.periodic(pollInterval, (_) => _checkWindowsClipboard());
+    // 2. Poll Windows OS clipboard for local changes if auto-sync is enabled
+    if (_autoSyncEnabled) {
+      _clipboardPollTimer = Timer.periodic(pollInterval, (_) => _checkWindowsClipboard());
+    }
     debugPrint('[ClipboardSync] Clipboard synchronization active.');
   }
 
   Future<void> _checkWindowsClipboard() async {
-    if (!_isSyncing || !socketClient.isAuthorized) return;
+    if (!_isSyncing || !_autoSyncEnabled || !socketClient.isAuthorized) return;
 
     try {
       final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -50,8 +71,28 @@ class ClipboardSyncService {
         await socketClient.sendClipboard(currentText);
         _clipboardEvents.add(currentText);
       }
-    } catch (e) {
+    } catch (_) {
       // Clipboard access might occasionally be locked by another Windows app
+    }
+  }
+
+  /// Manually pushes the current PC clipboard contents to the phone immediately.
+  Future<bool> pushCurrentClipboardNow() async {
+    try {
+      final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+      final String? currentText = data?.text;
+
+      if (currentText != null && currentText.isNotEmpty) {
+        _lastSyncedText = currentText;
+        debugPrint('[ClipboardSync] Manual push: Transmitting PC clipboard to Android: "$currentText"');
+        await socketClient.sendClipboard(currentText);
+        _clipboardEvents.add(currentText);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[ClipboardSync] Error manually pushing clipboard: $e');
+      return false;
     }
   }
 

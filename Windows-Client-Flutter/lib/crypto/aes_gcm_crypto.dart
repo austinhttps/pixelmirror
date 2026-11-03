@@ -9,11 +9,25 @@ import 'package:cryptography/cryptography.dart';
 /// Packed format: [12-byte IV/Nonce] + [Ciphertext] + [16-byte Auth Tag].
 class AesGcmEngine {
   static const int keyLengthBytes = 32; // 256-bit key
-  static const int ivLengthBytes = 12; // 96-bit nonce
-  static const int tagLengthBytes = 16; // 128-bit authentication tag
+  static const int ivLengthBytes = 12; // Strict 12-byte (96-bit) IV nonce
+  static const int tagLengthBytes = 16; // Strict 16-byte (128-bit) authentication tag
 
-  final AesGcm _algorithm = AesGcm.with256bits();
+  final AesGcm _algorithm = AesGcm.with256bits(nonceLength: 12);
   final Random _secureRandom = Random.secure();
+
+  /// Symmetrically decodes a Base64 string (supporting standard and URL-safe Base64 with/without padding).
+  static Uint8List decodeBase64(String input) {
+    String normalized = input.trim().replaceAll('-', '+').replaceAll('_', '/');
+    while (normalized.length % 4 != 0) {
+      normalized += '=';
+    }
+    return Uint8List.fromList(base64Decode(normalized));
+  }
+
+  /// Symmetrically encodes a byte array to standard Base64 string without line wrapping.
+  static String encodeBase64(List<int> bytes) {
+    return base64Encode(bytes);
+  }
 
   /// Generates a cryptographically secure random 256-bit AES key (Base64-encoded).
   String generateKeyBase64() {
@@ -21,10 +35,10 @@ class AesGcmEngine {
     for (int i = 0; i < keyLengthBytes; i++) {
       keyBytes[i] = _secureRandom.nextInt(256);
     }
-    return base64Encode(keyBytes);
+    return encodeBase64(keyBytes);
   }
 
-  /// Generates a fresh 12-byte cryptographically secure IV nonce.
+  /// Generates a fresh strict 12-byte cryptographically secure random IV nonce.
   Uint8List generateIv() {
     final Uint8List iv = Uint8List(ivLengthBytes);
     for (int i = 0; i < ivLengthBytes; i++) {
@@ -33,16 +47,16 @@ class AesGcmEngine {
     return iv;
   }
 
-  /// Encrypts plaintext bytes using 256-bit AES-GCM.
+  /// Encrypts plaintext bytes using 256-bit AES-GCM (AES/GCM/NoPadding).
   /// Returns packed byte array: [12-byte IV] + [Ciphertext] + [16-byte Tag].
   Future<Uint8List> encryptBytes({
     required Uint8List plaintext,
     required String secretKeyB64,
   }) async {
-    final Uint8List keyBytes = base64Decode(secretKeyB64.trim());
+    final Uint8List keyBytes = decodeBase64(secretKeyB64);
     if (keyBytes.length != keyLengthBytes) {
       throw ArgumentError(
-        'Invalid secret key length: expected $keyLengthBytes bytes, got ${keyBytes.length}',
+        'Invalid secret key length: expected $keyLengthBytes bytes (256-bit), got ${keyBytes.length}',
       );
     }
 
@@ -55,9 +69,16 @@ class AesGcmEngine {
       nonce: nonce,
     );
 
+    final List<int> macBytes = secretBox.mac.bytes;
+    if (macBytes.length != tagLengthBytes) {
+      throw StateError(
+        'Unexpected auth tag length: expected $tagLengthBytes bytes (128-bit), got ${macBytes.length}',
+      );
+    }
+
     // Pack into [12-byte IV] + [Ciphertext] + [16-byte Tag]
     final Uint8List packed = Uint8List(
-      nonce.length + secretBox.cipherText.length + secretBox.mac.bytes.length,
+      nonce.length + secretBox.cipherText.length + macBytes.length,
     );
 
     int offset = 0;
@@ -67,7 +88,7 @@ class AesGcmEngine {
     packed.setRange(offset, offset + secretBox.cipherText.length, secretBox.cipherText);
     offset += secretBox.cipherText.length;
 
-    packed.setRange(offset, offset + secretBox.mac.bytes.length, secretBox.mac.bytes);
+    packed.setRange(offset, offset + macBytes.length, macBytes);
 
     return packed;
   }
@@ -82,7 +103,7 @@ class AesGcmEngine {
       plaintext: plaintextBytes,
       secretKeyB64: secretKeyB64,
     );
-    return base64Encode(packed);
+    return encodeBase64(packed);
   }
 
   /// Decrypts a packed byte array [12-byte IV] + [Ciphertext] + [16-byte Tag].
@@ -95,19 +116,19 @@ class AesGcmEngine {
       throw ArgumentError('Payload too short for 256-bit AES-GCM packet.');
     }
 
-    final Uint8List keyBytes = base64Decode(secretKeyB64.trim());
+    final Uint8List keyBytes = decodeBase64(secretKeyB64);
     if (keyBytes.length != keyLengthBytes) {
       throw ArgumentError(
-        'Invalid secret key length: expected $keyLengthBytes bytes, got ${keyBytes.length}',
+        'Invalid secret key length: expected $keyLengthBytes bytes (256-bit), got ${keyBytes.length}',
       );
     }
 
     final SecretKey secretKey = SecretKey(keyBytes);
 
-    // Extract IV (first 12 bytes)
+    // Extract IV (strictly first 12 bytes)
     final Uint8List nonce = packedData.sublist(0, ivLengthBytes);
 
-    // Extract Auth Tag (last 16 bytes)
+    // Extract Auth Tag (strictly last 16 bytes = 128-bit authentication tag)
     final int tagStart = packedData.length - tagLengthBytes;
     final Uint8List tag = packedData.sublist(tagStart);
 
@@ -133,7 +154,7 @@ class AesGcmEngine {
     required String base64Payload,
     required String secretKeyB64,
   }) async {
-    final Uint8List packed = base64Decode(base64Payload.trim());
+    final Uint8List packed = decodeBase64(base64Payload);
     final Uint8List decryptedBytes = await decryptBytes(
       packedData: packed,
       secretKeyB64: secretKeyB64,

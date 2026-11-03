@@ -121,6 +121,22 @@ class NotificationEnqueueData {
       iconBase64: json['icon_base64'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'notification_id': notificationId,
+        'package_name': packageName,
+        'app_label': appLabel,
+        'title': title,
+        'body': body,
+        'icon_base64': iconBase64,
+      };
+
+  EventPacket toEventPacket() {
+    return EventPacket(
+      eventType: ProtocolConstants.eventNotificationEnqueue,
+      data: toJson(),
+    );
+  }
 }
 
 /// 2.2 Interactive Quick-Reply Payload
@@ -134,6 +150,14 @@ class NotificationReplyData {
     required this.packageName,
     required this.replyText,
   });
+
+  factory NotificationReplyData.fromJson(Map<String, dynamic> json) {
+    return NotificationReplyData(
+      notificationId: json['notification_id'] as int? ?? 0,
+      packageName: json['package_name'] as String? ?? '',
+      replyText: json['reply_text'] as String? ?? '',
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'notification_id': notificationId,
