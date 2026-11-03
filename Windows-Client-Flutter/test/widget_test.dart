@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,5 +104,58 @@ void main() {
     final parsedPacket = EventPacket.fromJson(jsonDecode(jsonStr));
     final parsedClip = ClipboardSyncData.fromJson(parsedPacket.data);
     expect(parsedClip.text, specialText);
+  });
+
+  test('Tampered ciphertext is strictly rejected with authentication failure', () async {
+    final engine = AesGcmEngine();
+    final key = engine.generateKeyBase64();
+
+    final encryptedB64 = await engine.encryptStringToBase64(
+      plaintext: 'Sensitive banking or clipboard data',
+      secretKeyB64: key,
+    );
+
+    final rawBytes = AesGcmEngine.decodeBase64(encryptedB64);
+    // Tamper with one byte in the ciphertext payload
+    rawBytes[15] ^= 0xFF;
+    final tamperedB64 = AesGcmEngine.encodeBase64(rawBytes);
+
+    expect(
+      () => engine.decryptBase64ToString(
+        base64Payload: tamperedB64,
+        secretKeyB64: key,
+      ),
+      throwsA(anything),
+    );
+  });
+
+  test('LineSplitter and utf8.decoder handle fragmented socket chunks with multibyte UTF-8', () async {
+    // Chinese characters and emoji split across multiple raw byte boundaries
+    const sourceText = '{"event_type":"CLIPBOARD_SYNC","data":{"text":"🚀 测试 🌟"}}\n';
+    final allBytes = utf8.encode(sourceText);
+
+    // Split bytes arbitrarily into small chunks (e.g. 5 bytes each) to test boundary safety
+    final streamController = StreamController<List<int>>();
+    final linesReceived = <String>[];
+
+    streamController.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      linesReceived.add(line);
+    });
+
+    for (int i = 0; i < allBytes.length; i += 5) {
+      final end = (i + 5 < allBytes.length) ? i + 5 : allBytes.length;
+      streamController.add(allBytes.sublist(i, end));
+    }
+    await streamController.close();
+
+    expect(linesReceived.length, 1);
+    expect(linesReceived.first, '{"event_type":"CLIPBOARD_SYNC","data":{"text":"🚀 测试 🌟"}}');
+
+    final parsed = EventPacket.fromJson(jsonDecode(linesReceived.first));
+    expect(parsed.eventType, 'CLIPBOARD_SYNC');
+    expect(parsed.data['text'], '🚀 测试 🌟');
   });
 }

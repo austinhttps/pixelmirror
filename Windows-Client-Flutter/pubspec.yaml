@@ -17,15 +17,13 @@ dependencies:
 
   # System Tray Integration
   system_tray: ^2.0.3
-  tray_manager: ^0.8.0
 
   # Cryptography (256-bit AES-GCM conforming to API_CONTRACT.md)
   cryptography: ^2.7.0
   crypto: ^3.0.3
 
-  # Windows Native Notifications & Drag-and-Drop
+  # Windows Native Notifications
   local_notifier: ^0.1.6
-  desktop_drop: ^0.8.4
 
   # mDNS Auto-Discovery
   multicast_dns: ^0.3.2+6

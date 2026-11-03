@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
+import 'package:window_manager/window_manager.dart';
 import '../models/contract_models.dart';
 import '../network/socket_client.dart';
 
@@ -73,14 +74,22 @@ class NativeNotificationService {
         ],
       );
 
-      notification.onClickAction = (actionIndex) {
+      notification.onClickAction = (actionIndex) async {
         debugPrint('[NotificationService] User clicked notification action on toast: $actionIndex');
         _inAppNotificationStream.add(data);
+        try {
+          await windowManager.show();
+          await windowManager.focus();
+        } catch (_) {}
       };
 
-      notification.onClick = () {
+      notification.onClick = () async {
         debugPrint('[NotificationService] User clicked notification toast');
         _inAppNotificationStream.add(data);
+        try {
+          await windowManager.show();
+          await windowManager.focus();
+        } catch (_) {}
       };
 
       await notification.show();

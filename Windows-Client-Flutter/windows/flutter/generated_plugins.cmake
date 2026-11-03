@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  desktop_drop
   flutter_acrylic
   local_notifier
   screen_retriever_windows

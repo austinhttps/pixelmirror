@@ -41,6 +41,8 @@ class SocketServerService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         Log.i(tag, "SocketServerService created.")
+        com.google.pixelmirror.companion.crypto.CryptoManager.init(applicationContext)
+        com.google.pixelmirror.companion.util.ClipboardSyncHelper.init(applicationContext)
         observeInboundEvents()
         observeConnectionStatus()
     }

@@ -19,14 +19,16 @@ import com.google.pixelmirror.companion.network.SocketEventBus
 object ClipboardSyncHelper {
 
     private const val tag = "ClipboardSyncHelper"
-    private var lastSyncedHash: Int? = null
-    private var lastReceivedFromPcHash: Int? = null
+    private var lastSyncedText: String? = null
+    private var lastReceivedFromPcText: String? = null
     private var lastReceivedFromPcTimestamp: Long = 0L
     private var clipboardManager: ClipboardManager? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Synchronized
     fun init(context: Context) {
-        clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        if (clipboardManager != null) return
+        clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         clipboardManager?.addPrimaryClipChangedListener {
             val status = SocketEventBus.connectionStatus.value
             if (status != ConnectionStatus.AUTHORIZED && status != ConnectionStatus.CONNECTED) {
@@ -35,17 +37,19 @@ object ClipboardSyncHelper {
 
             val clip = clipboardManager?.primaryClip ?: return@addPrimaryClipChangedListener
             if (clip.itemCount > 0) {
-                val text = clip.getItemAt(0).text?.toString() ?: return@addPrimaryClipChangedListener
-                val currentHash = text.hashCode()
+                val item = clip.getItemAt(0)
+                val text = item.coerceToText(context)?.toString() ?: return@addPrimaryClipChangedListener
+                if (text.isBlank()) return@addPrimaryClipChangedListener
 
-                // Echo loop prevention: check if this clip was just set from PC
-                val isRecentPcClip = currentHash == lastReceivedFromPcHash &&
-                        (System.currentTimeMillis() - lastReceivedFromPcTimestamp) < 3000L
+                synchronized(this) {
+                    val isRecentPcClip = text == lastReceivedFromPcText &&
+                            (System.currentTimeMillis() - lastReceivedFromPcTimestamp) < 3000L
 
-                if (currentHash != lastSyncedHash && !isRecentPcClip && text.isNotBlank()) {
-                    lastSyncedHash = currentHash
-                    Log.d(tag, "Local Android clipboard changed. Dispatching CLIPBOARD_SYNC: '$text'")
-                    SocketEventBus.postOutbound(ClipboardSyncData(text).toEventPacket())
+                    if (text != lastSyncedText && !isRecentPcClip) {
+                        lastSyncedText = text
+                        Log.d(tag, "Local Android clipboard changed. Dispatching CLIPBOARD_SYNC: '$text'")
+                        SocketEventBus.postOutbound(ClipboardSyncData(text).toEventPacket())
+                    }
                 }
             }
         }
@@ -56,17 +60,18 @@ object ClipboardSyncHelper {
      */
     fun updateSystemClipboard(context: Context, text: String) {
         if (text.isBlank()) return
-        val textHash = text.hashCode()
-        if (textHash == lastSyncedHash) return
+
+        synchronized(this) {
+            if (text == lastSyncedText) return
+            lastSyncedText = text
+            lastReceivedFromPcText = text
+            lastReceivedFromPcTimestamp = System.currentTimeMillis()
+        }
 
         mainHandler.post {
             try {
                 val manager = clipboardManager
                     ?: (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                lastSyncedHash = textHash
-                lastReceivedFromPcHash = textHash
-                lastReceivedFromPcTimestamp = System.currentTimeMillis()
-
                 val clip = ClipData.newPlainText("Pixel Mirror Sync", text)
                 manager.setPrimaryClip(clip)
                 Log.i(tag, "Phone clipboard updated from Windows: '$text'")

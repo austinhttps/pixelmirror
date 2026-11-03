@@ -94,54 +94,20 @@ class SocketClient {
 
       final Completer<bool> handshakeCompleter = Completer<bool>();
 
-      // Buffer incoming socket bytes
-      final StringBuffer buffer = StringBuffer();
-      int braceDepth = 0;
-      bool inString = false;
-      bool isEscaped = false;
-      bool objectStarted = false;
+      _socket!
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (String line) async {
+          final String trimmed = line.trim();
+          if (trimmed.isEmpty) return;
 
-      _socket!.listen(
-        (List<int> bytes) async {
-          final String chunk = utf8.decode(bytes, allowMalformed: true);
-
-          for (int i = 0; i < chunk.length; i++) {
-            final String char = chunk[i];
-            buffer.write(char);
-
-            if (char == '"' && !isEscaped) {
-              inString = !inString;
-            } else if (char == '\\' && inString) {
-              isEscaped = !isEscaped;
-              continue;
-            } else if (!inString) {
-              if (char == '{') {
-                braceDepth++;
-                objectStarted = true;
-              } else if (char == '}') {
-                braceDepth--;
-                if (objectStarted && braceDepth == 0) {
-                  final String completeJson = buffer.toString().trim();
-                  buffer.clear();
-                  objectStarted = false;
-
-                  if (!handshakeCompleter.isCompleted) {
-                    final bool authOk = _handleHandshakeResponse(completeJson);
-                    handshakeCompleter.complete(authOk);
-                  } else {
-                    await _processInboundChunk(completeJson);
-                  }
-                }
-              } else if (char == '\n' && !objectStarted) {
-                // Base64 encrypted packet line
-                final String line = buffer.toString().trim();
-                buffer.clear();
-                if (line.isNotEmpty) {
-                  await _processInboundChunk(line);
-                }
-              }
-            }
-            isEscaped = false;
+          if (!handshakeCompleter.isCompleted) {
+            final bool authOk = _handleHandshakeResponse(trimmed);
+            handshakeCompleter.complete(authOk);
+          } else {
+            await _processInboundChunk(trimmed);
           }
         },
         onError: (error) {

@@ -20,6 +20,10 @@ class PixelMirrorApplication : Application() {
         // Section 5: Integrate DynamicColors so app inherits Pixel 10 wallpaper palette
         DynamicColors.applyToActivitiesIfAvailable(this)
 
+        // Initialize cryptography and clipboard sync listeners at application process start
+        com.google.pixelmirror.companion.crypto.CryptoManager.init(this)
+        com.google.pixelmirror.companion.util.ClipboardSyncHelper.init(this)
+
         createNotificationChannels()
     }
 
